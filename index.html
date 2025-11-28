@@ -37,7 +37,8 @@
                 arrowRight: <path d="M5 12h14M12 5l7 7-7 7" />,
                 dollar: <path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />,
                 home: <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />,
-                check: <path d="M20 6L9 17l-5-5" />
+                check: <path d="M20 6L9 17l-5-5" />,
+                edit: <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
             };
             return (
                 <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -83,6 +84,26 @@
                 setTrips(trips.map(t => {
                     if (t.id !== tripId) return t;
                     return { ...t, expenses: [...t.expenses, { ...expenseData, id: Date.now() }] };
+                }));
+            };
+
+            const editExpense = (tripId, expenseId, expenseData) => {
+                setTrips(trips.map(t => {
+                    if (t.id !== tripId) return t;
+                    return { 
+                        ...t, 
+                        expenses: t.expenses.map(e => e.id === expenseId ? { ...expenseData, id: expenseId } : e)
+                    };
+                }));
+            };
+
+            const deleteExpense = (tripId, expenseId) => {
+                setTrips(trips.map(t => {
+                    if (t.id !== tripId) return t;
+                    return { 
+                        ...t, 
+                        expenses: t.expenses.filter(e => e.id !== expenseId)
+                    };
                 }));
             };
 
@@ -184,6 +205,8 @@
                             trip={currentTrip} 
                             onAddMember={(name) => addMember(currentTrip.id, name)}
                             onAddExpense={(data) => addExpense(currentTrip.id, data)}
+                            onEditExpense={(id, data) => editExpense(currentTrip.id, id, data)}
+                            onDeleteExpense={(id) => deleteExpense(currentTrip.id, id)}
                             settlement={calculateSettlement(currentTrip)}
                         />
                     )}
@@ -242,7 +265,7 @@
             );
         };
 
-        const TripView = ({ trip, onAddMember, onAddExpense, settlement }) => {
+        const TripView = ({ trip, onAddMember, onAddExpense, onEditExpense, onDeleteExpense, settlement }) => {
             const [activeTab, setActiveTab] = useState('expenses');
             
             return (
@@ -261,7 +284,15 @@
                     </div>
 
                     {activeTab === 'members' && <MembersTab members={trip.members} onAdd={onAddMember} />}
-                    {activeTab === 'expenses' && <ExpensesTab members={trip.members} expenses={trip.expenses} onAdd={onAddExpense} />}
+                    {activeTab === 'expenses' && (
+                        <ExpensesTab 
+                            members={trip.members} 
+                            expenses={trip.expenses} 
+                            onAdd={onAddExpense}
+                            onEdit={onEditExpense}
+                            onDelete={onDeleteExpense}
+                        />
+                    )}
                     {activeTab === 'report' && <ReportTab settlement={settlement} trip={trip} />}
                 </div>
             );
@@ -299,17 +330,43 @@
             );
         };
 
-        const ExpensesTab = ({ members, expenses, onAdd }) => {
+        const ExpensesTab = ({ members, expenses, onAdd, onEdit, onDelete }) => {
             const [showForm, setShowForm] = useState(false);
+            const [editingExpense, setEditingExpense] = useState(null);
             
             if (members.length < 2) return <div className="p-4 text-center text-gray-500 bg-white rounded-lg">Please add at least 2 members before adding expenses.</div>;
+
+            const handleEditClick = (expense) => {
+                setEditingExpense(expense);
+                setShowForm(true);
+            };
+
+            const handleAddClick = () => {
+                setEditingExpense(null);
+                setShowForm(true);
+            };
+
+            const handleFormSubmit = (data) => {
+                if (editingExpense) {
+                    onEdit(editingExpense.id, data);
+                } else {
+                    onAdd(data);
+                }
+                setShowForm(false);
+                setEditingExpense(null);
+            };
+
+            const handleCancel = () => {
+                setShowForm(false);
+                setEditingExpense(null);
+            };
 
             return (
                 <div className="space-y-4">
                     {!showForm ? (
                         <>
                             <button 
-                                onClick={() => setShowForm(true)}
+                                onClick={handleAddClick}
                                 className="w-full py-3 bg-blue-600 text-white rounded-lg font-semibold shadow hover:bg-blue-700"
                             >
                                 + Add Expense
@@ -318,12 +375,22 @@
                                 {expenses.map(exp => {
                                     const payer = members.find(m => m.id === parseInt(exp.paidBy))?.name || 'Unknown';
                                     return (
-                                        <div key={exp.id} className="card p-4 flex justify-between items-center">
+                                        <div key={exp.id} className="card p-4 flex justify-between items-center group">
                                             <div>
                                                 <div className="font-bold text-gray-800">{exp.description}</div>
                                                 <div className="text-xs text-gray-500">Paid by <span className="font-semibold">{payer}</span></div>
                                             </div>
-                                            <div className="font-bold text-blue-600">{parseFloat(exp.amount).toFixed(2)}</div>
+                                            <div className="flex items-center gap-3">
+                                                <div className="font-bold text-blue-600">{parseFloat(exp.amount).toFixed(2)}</div>
+                                                <div className="flex gap-1">
+                                                    <button onClick={() => handleEditClick(exp)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded">
+                                                        <Icon name="edit" size={16}/>
+                                                    </button>
+                                                    <button onClick={() => onDelete(exp.id)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded">
+                                                        <Icon name="trash" size={16}/>
+                                                    </button>
+                                                </div>
+                                            </div>
                                         </div>
                                     );
                                 })}
@@ -331,17 +398,23 @@
                             </div>
                         </>
                     ) : (
-                        <ExpenseForm members={members} onCancel={() => setShowForm(false)} onSubmit={(data) => { onAdd(data); setShowForm(false); }} />
+                        <ExpenseForm 
+                            key={editingExpense ? editingExpense.id : 'new'} 
+                            members={members} 
+                            onCancel={handleCancel} 
+                            onSubmit={handleFormSubmit}
+                            initialData={editingExpense} 
+                        />
                     )}
                 </div>
             );
         };
 
-        const ExpenseForm = ({ members, onCancel, onSubmit }) => {
-            const [desc, setDesc] = useState("");
-            const [amount, setAmount] = useState("");
-            const [paidBy, setPaidBy] = useState(members[0]?.id);
-            const [splitAmong, setSplitAmong] = useState(members.map(m => m.id));
+        const ExpenseForm = ({ members, onCancel, onSubmit, initialData }) => {
+            const [desc, setDesc] = useState(initialData?.description || "");
+            const [amount, setAmount] = useState(initialData?.amount || "");
+            const [paidBy, setPaidBy] = useState(initialData?.paidBy || members[0]?.id);
+            const [splitAmong, setSplitAmong] = useState(initialData?.splitAmong || members.map(m => m.id));
 
             const toggleSplit = (id) => {
                 if (splitAmong.includes(id)) {
@@ -359,7 +432,7 @@
 
             return (
                 <div className="card p-4 space-y-4">
-                    <h3 className="font-bold">New Expense</h3>
+                    <h3 className="font-bold">{initialData ? 'Edit Expense' : 'New Expense'}</h3>
                     <input className="w-full border p-2 rounded" placeholder="Description (e.g. Dinner)" value={desc} onChange={e => setDesc(e.target.value)} />
                     <input className="w-full border p-2 rounded" type="number" placeholder="Amount" value={amount} onChange={e => setAmount(e.target.value)} />
                     
@@ -386,7 +459,7 @@
 
                     <div className="flex gap-2 pt-2">
                         <button onClick={onCancel} type="button" className="flex-1 py-2 border rounded">Cancel</button>
-                        <button onClick={handleSubmit} className="flex-1 py-2 bg-blue-600 text-white rounded font-bold">Save</button>
+                        <button onClick={handleSubmit} className="flex-1 py-2 bg-blue-600 text-white rounded font-bold">{initialData ? 'Update' : 'Save'}</button>
                     </div>
                 </div>
             );
