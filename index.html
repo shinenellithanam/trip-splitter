@@ -5,10 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TripSplit - Easy Settlement</title>
 
-        <!-- APP ICON CONFIGURATION -->
+            <!-- APP ICON CONFIGURATION -->
     <link rel="icon" type="image/png" href="icon.png">
     <link rel="apple-touch-icon" href="icon.png">
-    
+
     <!-- Tailwind CSS for styling -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- React and ReactDOM -->
@@ -477,10 +477,11 @@
             const downloadPDF = () => {
                 const { jsPDF } = window.jspdf;
                 const doc = new jsPDF();
+                const primaryColor = [37, 99, 235]; // Blue color
 
                 // 1. Title & Header
                 doc.setFontSize(22);
-                doc.setTextColor(40, 40, 40);
+                doc.setTextColor(...primaryColor); // Blue Heading
                 doc.text(trip.name, 14, 20);
                 
                 doc.setFontSize(10);
@@ -494,12 +495,15 @@
                 doc.text(`Cost Per Person: ${(settlement.total / (members.length || 1)).toFixed(2)}`, 80, 35);
 
                 // 3. Expenses Table
-                const tableColumn = ["Description", "Amount", "Paid By", "Shared With"];
-                const tableRows = trip.expenses.map(exp => {
+                // Sort by creation time (ID)
+                const sortedExpenses = [...trip.expenses].sort((a, b) => a.id - b.id);
+
+                const tableColumn = ["#", "Description", "Amount", "Paid By", "Shared With"];
+                const tableRows = sortedExpenses.map((exp, index) => {
                     const payer = getMemberName(parseInt(exp.paidBy));
                     // Get names of everyone involved in split
                     const splitNames = exp.splitAmong.map(id => getMemberName(id)).join(", ");
-                    return [exp.description, parseFloat(exp.amount).toFixed(2), payer, splitNames];
+                    return [index + 1, exp.description, parseFloat(exp.amount).toFixed(2), payer, splitNames];
                 });
 
                 doc.autoTable({
@@ -507,17 +511,35 @@
                     head: [tableColumn],
                     body: tableRows,
                     theme: 'grid',
-                    headStyles: { fillColor: [66, 135, 245] },
+                    headStyles: { fillColor: primaryColor },
                 });
 
-                // 4. Settlements Section
                 let finalY = doc.lastAutoTable.finalY + 15;
-                
+
+                // 4. Total Payments Breakdown (New Section)
                 doc.setFontSize(14);
+                doc.setTextColor(...primaryColor); // Blue Heading
+                doc.text("Total Payments by Member", 14, finalY);
+                finalY += 8;
+
+                doc.setFontSize(11);
+                doc.setTextColor(0, 0, 0);
+                members.forEach(m => {
+                    const paid = (settlement.memberSpending[m.id] || 0).toFixed(2);
+                    doc.text(`${m.name}: ${paid}`, 14, finalY);
+                    finalY += 6;
+                });
+
+                finalY += 10;
+
+                // 5. Settlements Section
+                doc.setFontSize(14);
+                doc.setTextColor(...primaryColor); // Blue Heading
                 doc.text("Settlement Plan", 14, finalY);
                 finalY += 8;
 
                 doc.setFontSize(11);
+                doc.setTextColor(0, 0, 0);
                 if (settlement.settlements.length === 0) {
                     doc.text("All settled up!", 14, finalY);
                 } else {
@@ -528,7 +550,7 @@
                     });
                 }
 
-                // 5. Save
+                // 6. Save
                 doc.save(`${trip.name.replace(/\s+/g, '_')}_Report.pdf`);
             };
 
@@ -601,4 +623,3 @@
     </script>
 </body>
 </html>
-
